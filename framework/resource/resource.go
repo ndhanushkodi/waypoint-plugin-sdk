@@ -291,8 +291,8 @@ func (r *Resource) mapperForStatus(deps []string) (*argmapper.Func, error) {
 	if err != nil {
 		return nil, err
 	}
-	// q.Q("output:")
-	// q.Q(len(outputs.Values()))
+	q.Q("output pre-state check:")
+	q.Q(len(outputs.Values()))
 	// q.Q(outputs.Values()[0])
 
 	// Our inputs default to whatever the function requires and our
