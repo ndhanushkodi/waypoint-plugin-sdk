@@ -278,15 +278,95 @@ func (r *Resource) mapperForStatus(deps []string) (*argmapper.Func, error) {
 	if r.status == nil {
 		r.status = &pb.StatusReport_Resource{}
 	}
+	outputs, err := argmapper.NewValueSet(nil)
+	if err != nil {
+		return nil, err
+	}
 
-	return argmapper.BuildFunc(original.Input(), nil, func(in, _ *argmapper.ValueSet) error {
+	// Our inputs default to whatever the function requires and our
+	// output defaults to nothing (only the error type). We will proceed to
+	// modify these so that the output contains our state type and the input
+	// does NOT contain our state type (since it'll be allocated and provided
+	// by us). If we have no state type, we do nothing!
+	statusType := reflect.TypeOf(r.status)
+	inputs := original.Input()
+	if r.stateType != nil {
+		// For outputs, we will only return the state type.
+		outputs, err = argmapper.NewValueSet(append(outputs.Values(), argmapper.Value{
+			Type: r.stateType,
+		}))
+		if err != nil {
+			return nil, err
+		}
+
+		// Zero our state now
+		r.initState(true)
+
+		// For input, we have to remove the state type
+		inputVals := inputs.Values()
+		for i := 0; i < len(inputVals); i++ {
+			v := inputVals[i]
+			if v.Type != r.stateType {
+				// easy case, the type is not our state type
+				continue
+			}
+
+			// the type IS our state type, we need to remove it. We do
+			// this by swapping with the last element (order doesn't matter)
+			// and decrementing i so we reloop over this value.
+			inputVals[len(inputVals)-1], inputVals[i] = inputVals[i], inputVals[len(inputVals)-1]
+			inputVals = inputVals[:len(inputVals)-1]
+			i--
+		}
+		for i := 0; i < len(inputVals); i++ {
+			v := inputVals[i]
+			if v.Type != statusType {
+				// easy case, the type is not our state type
+				continue
+			}
+
+			// the type IS our state type, we need to remove it. We do
+			// this by swapping with the last element (order doesn't matter)
+			// and decrementing i so we reloop over this value.
+			inputVals[len(inputVals)-1], inputVals[i] = inputVals[i], inputVals[len(inputVals)-1]
+			inputVals = inputVals[:len(inputVals)-1]
+			i--
+		}
+		inputs, err = argmapper.NewValueSet(inputVals)
+		if err != nil {
+			return nil, err
+		}
+	}
+	// Ensure we have the state available as an argument. If it is
+	// nil then we initialize it.
+	var buildArgs []argmapper.Arg
+	if r.stateType != nil {
+		if r.stateValue == nil {
+			r.initState(true)
+		}
+		buildArgs = append(buildArgs, argmapper.Typed(r.stateValue))
+		buildArgs = append(buildArgs, argmapper.Typed(statusType))
+	}
+
+	// We want to ensure that the destroy function is called at most once.
+	buildArgs = append(buildArgs, argmapper.FuncOnce())
+
+	return argmapper.BuildFunc(inputs, outputs, func(in, out *argmapper.ValueSet) error {
 		args := in.Args()
 		args = append(args, argmapper.Typed(r.status))
+		args = append(args, argmapper.Typed(r.stateValue))
+		// Ensure our output value for our state type is set
+		if v := out.Typed(r.stateType); v != nil {
+			v.Value = reflect.ValueOf(r.stateValue)
+		}
+		if v := out.Typed(statusType); v != nil {
+			v.Value = reflect.ValueOf(r.status)
+		}
 		// Call our function. We throw away any result types except for the
 		// error.
 		result := original.Call(args...)
 		return result.Err()
-	}, argmapper.FuncOnce())
+	}, buildArgs...)
 }
 
 // mapperForDestroy returns an argmapper func that will call the destroy
