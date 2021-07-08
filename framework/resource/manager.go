@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/go-argmapper"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-multierror"
+	"github.com/ryboe/q"
 
 	"github.com/hashicorp/waypoint-plugin-sdk/component"
 	pb "github.com/hashicorp/waypoint-plugin-sdk/proto/gen"
@@ -333,6 +334,7 @@ func (m *Manager) StatusAll(args ...interface{}) error {
 	for _, arg := range args {
 		mapperArgs = append(mapperArgs, argmapper.Typed(arg))
 	}
+	q.Q("status all order count:", len(cs.Order))
 
 	// Go through our creation order and create all our destroyers.
 	for i := 0; i < len(cs.Order); i++ {
@@ -351,6 +353,7 @@ func (m *Manager) StatusAll(args ...interface{}) error {
 		if next := i + 1; next < len(cs.Order) {
 			deps = cs.Order[next:]
 		}
+		q.Q("status deps:", deps)
 
 		// Create the mapper for destroy. The dependencies are the set of
 		// created resources in the creation order that were ahead of this one.
@@ -392,6 +395,16 @@ func (m *Manager) StatusAll(args ...interface{}) error {
 	result := finalFunc.Call(mapperArgs...)
 
 	return result.Err()
+}
+
+func (m *Manager) Status() []pb.StatusReport_Resource {
+	var reports []pb.StatusReport_Resource
+	for _, r := range m.resources {
+		if r.status != nil {
+			reports = append(reports, r.Status())
+		}
+	}
+	return reports
 }
 
 func (m *Manager) mapperArgs() ([]argmapper.Arg, error) {
