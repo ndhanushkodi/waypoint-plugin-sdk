@@ -305,6 +305,95 @@ func (m *Manager) DestroyAll(args ...interface{}) error {
 	return result.Err()
 }
 
+// StatusAll destroys all the resources under management. This will call
+// Destroy in the reverse order of Create. All the state that was created
+// via Create will be available to the Destroy callbacks. Note that after
+// a resource is destroyed, their state is also set to nil.
+//
+// Only resources that have been created will be destroyed. This means
+// that if Create partially failed, then only the resources that attempted
+// creation will have Destroy called. Resources that were never called to
+// Create will do nothing.
+func (m *Manager) StatusAll(args ...interface{}) error {
+	if err := m.Validate(); err != nil {
+		return err
+	}
+
+	cs := m.createState
+	if cs == nil || len(cs.Order) == 0 {
+		// We have no creation that was ever done so we have nothing to destroy.
+		return nil
+	}
+
+	var finalInputs []argmapper.Value
+	mapperArgs, err := m.mapperArgs()
+	if err != nil {
+		return err
+	}
+	for _, arg := range args {
+		mapperArgs = append(mapperArgs, argmapper.Typed(arg))
+	}
+
+	// Go through our creation order and create all our destroyers.
+	for i := 0; i < len(cs.Order); i++ {
+		r := m.Resource(cs.Order[i])
+		if r == nil {
+			// We are missing a resource that we should be destroying.
+			return fmt.Errorf(
+				"status failed: missing resource definition %q",
+				cs.Order[i],
+			)
+		}
+
+		// The dependencies are the resources that were created after
+		// this resource.
+		var deps []string
+		if next := i + 1; next < len(cs.Order) {
+			deps = cs.Order[next:]
+		}
+
+		// Create the mapper for destroy. The dependencies are the set of
+		// created resources in the creation order that were ahead of this one.
+		f, err := r.mapperForStatus(deps)
+		if err != nil {
+			return err
+		}
+		mapperArgs = append(mapperArgs,
+			argmapper.ConverterFunc(f),
+			argmapper.Typed(r.State()),
+		)
+
+		// Ensure that our final func is dependent on the marker for
+		// this resource so that it definitely gets called.
+		finalInputs = append(finalInputs, markerValue(r.name))
+	}
+
+	// Create our final target function. This has as dependencies all the
+	// markers for the resources that should be destroyed.
+	finalInputSet, err := argmapper.NewValueSet(finalInputs)
+	if err != nil {
+		return err
+	}
+
+	finalFunc, err := argmapper.BuildFunc(
+		finalInputSet, nil,
+		func(in, out *argmapper.ValueSet) error {
+			// no-op on purpose. This function only exists to set the
+			// required inputs for argmapper to create the correct call
+			// graph.
+			return nil
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	// Call it
+	result := finalFunc.Call(mapperArgs...)
+
+	return result.Err()
+}
+
 func (m *Manager) mapperArgs() ([]argmapper.Arg, error) {
 	result := []argmapper.Arg{
 		argmapper.Logger(m.logger),
