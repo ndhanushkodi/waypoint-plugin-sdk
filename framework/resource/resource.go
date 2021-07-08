@@ -109,6 +109,7 @@ func (r *Resource) SetState(v interface{}) error {
 // After Create is called, any state can be accessed via the State function.
 // This may be populated even during failure with partial state.
 func (r *Resource) Create(args ...interface{}) error {
+	q.Q("Create args:", args)
 	if err := r.Validate(); err != nil {
 		return err
 	}
@@ -155,6 +156,7 @@ func (r *Resource) Destroy(args ...interface{}) error {
 
 // Status
 func (r *Resource) Status(args ...interface{}) error {
+	q.Q("status args:", args)
 	if err := r.Validate(); err != nil {
 		return err
 	}
@@ -245,13 +247,11 @@ func (r *Resource) mapperForCreate(cs *createState) (*argmapper.Func, error) {
 			// Ensure our output value for our state type is set
 			if v := out.Typed(r.stateType); v != nil {
 				v.Value = reflect.ValueOf(r.stateValue)
-				q.Q("create value string:", v.Value.String())
 			}
 		}
 
 		// Ensure our output marker type is set
 		if v := out.TypedSubtype(markerVal.Type, markerVal.Subtype); v != nil {
-			q.Q("maker value too")
 			v.Value = markerVal.Value
 		}
 
@@ -269,8 +269,12 @@ func (r *Resource) mapperForCreate(cs *createState) (*argmapper.Func, error) {
 // mapperForStatus returns an argmapper func that will call the status
 // function
 func (r *Resource) mapperForStatus(deps []string) (*argmapper.Func, error) {
+	statusFunc := r.statusFunc
+	if statusFunc == nil {
+		statusFunc = func() {}
+	}
 	// Create the func for the createFunc as-is. We need to get the input/output sets.
-	original, err := argmapper.NewFunc(r.createFunc)
+	original, err := argmapper.NewFunc(statusFunc)
 	if err != nil {
 		return nil, err
 	}
@@ -289,24 +293,27 @@ func (r *Resource) mapperForStatus(deps []string) (*argmapper.Func, error) {
 	// modify these so that the output contains our state type and the input
 	// does NOT contain our state type (since it'll be allocated and provided
 	// by us). If we have no state type, we do nothing!
+	statusType := reflect.TypeOf(&pb.StatusReport_Resource{})
 	inputs := original.Input()
 	if r.stateType != nil {
 		// For outputs, we will only return the state type.
 		outputs, err = argmapper.NewValueSet(append(outputs.Values(), argmapper.Value{
-			Type: r.stateType,
+			// Type: r.stateType,
+			Type: statusType,
 		}))
 		if err != nil {
 			return nil, err
 		}
 
 		// Zero our state now
-		r.initState(true)
+		r.status = &pb.StatusReport_Resource{}
 
 		// For input, we have to remove the state type
 		inputVals := inputs.Values()
+		q.Q("-->pre input vals len:", len(inputVals))
 		for i := 0; i < len(inputVals); i++ {
 			v := inputVals[i]
-			if v.Type != r.stateType {
+			if v.Type != statusType {
 				// easy case, the type is not our state type
 				continue
 			}
@@ -318,11 +325,25 @@ func (r *Resource) mapperForStatus(deps []string) (*argmapper.Func, error) {
 			inputVals = inputVals[:len(inputVals)-1]
 			i--
 		}
+		q.Q("-->post input vals len:", len(inputVals))
 		inputs, err = argmapper.NewValueSet(inputVals)
 		if err != nil {
 			return nil, err
 		}
 	}
+
+	// Ensure we have the state available as an argument. If it is
+	// nil then we initialize it.
+	var buildArgs []argmapper.Arg
+	if r.stateType != nil {
+		if r.stateValue == nil {
+			r.initState(true)
+		}
+		buildArgs = append(buildArgs, argmapper.Typed(r.stateValue))
+	}
+
+	// We want to ensure that the destroy function is called at most once.
+	buildArgs = append(buildArgs, argmapper.FuncOnce())
 
 	return argmapper.BuildFunc(inputs, outputs, func(in, out *argmapper.ValueSet) error {
 		// Our available arguments are what was given to us and required
@@ -335,26 +356,45 @@ func (r *Resource) mapperForStatus(deps []string) (*argmapper.Func, error) {
 
 			// Ensure our output value for our state type is set
 			if v := out.Typed(r.stateType); v != nil {
+				// q.Q("")
+				// q.Q("--- pre")
+				// q.Q("status value string:", v.Value.String())
+				// q.Q("status value sub type string:", v.Subtype)
+				// q.Q("status string:", v.String())
 				v.Value = reflect.ValueOf(r.stateValue)
-				q.Q("create value string:", v.Value.String())
+				// q.Q("--- post")
+				// q.Q("status value string:", v.Value.String())
+				// q.Q("status value sub type string:", v.Subtype)
+				// q.Q("status string:", v.String())
+				// q.Q("")
 			}
 		}
 
 		// Ensure our output marker type is set
 		if v := out.TypedSubtype(markerVal.Type, markerVal.Subtype); v != nil {
-			q.Q("maker value too")
+			// q.Q("")
+			// q.Q("-> create marker thing set")
+			// q.Q("--- pre marker set")
+			// q.Q("status value string:", v.Value.String())
+			// q.Q("status value sub type string:", v.Subtype)
+			// q.Q("status string:", v.String())
 			v.Value = markerVal.Value
+			// q.Q("--- post marker set")
+			// q.Q("status value string:", v.Value.String())
+			// q.Q("status value sub type string:", v.Subtype)
+			// q.Q("status string:", v.String())
+			// q.Q("")
 		}
 
 		// If we have creation state, append our resource to the order.
-		if cs != nil {
-			cs.Order = append(cs.Order, r.name)
-		}
+		// if cs != nil {
+		// 	cs.Order = append(cs.Order, r.name)
+		// }
 
 		// Call our function. We throw away any result types except for the error.
 		result := original.Call(args...)
 		return result.Err()
-	}, argmapper.FuncOnce())
+	}, buildArgs...)
 }
 
 // mapperForDestroy returns an argmapper func that will call the destroy
