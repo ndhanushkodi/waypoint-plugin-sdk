@@ -182,6 +182,7 @@ func TestResourceStatus(t *testing.T) {
 	// q.Q(state)
 
 	// q.Q(r.status.Name)
+	require.NotNil(r.status)
 	require.Equal(state.Name, r.status.Name)
 
 	// Destroy

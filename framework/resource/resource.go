@@ -245,11 +245,13 @@ func (r *Resource) mapperForCreate(cs *createState) (*argmapper.Func, error) {
 			// Ensure our output value for our state type is set
 			if v := out.Typed(r.stateType); v != nil {
 				v.Value = reflect.ValueOf(r.stateValue)
+				q.Q("create value string:", v.Value.String())
 			}
 		}
 
 		// Ensure our output marker type is set
 		if v := out.TypedSubtype(markerVal.Type, markerVal.Subtype); v != nil {
+			q.Q("maker value too")
 			v.Value = markerVal.Value
 		}
 
@@ -291,6 +293,12 @@ func (r *Resource) mapperForStatus(deps []string) (*argmapper.Func, error) {
 	if err != nil {
 		return nil, err
 	}
+	outputs, err = argmapper.NewValueSet(append(outputs.Values(), argmapper.Value{
+		Type: reflect.TypeOf(&pb.StatusReport_Resource{}),
+	}))
+	if err != nil {
+		return nil, err
+	}
 	q.Q("output pre-state check:")
 	q.Q(len(outputs.Values()))
 	// q.Q(outputs.Values()[0])
@@ -301,46 +309,81 @@ func (r *Resource) mapperForStatus(deps []string) (*argmapper.Func, error) {
 	// does NOT contain our state type (since it'll be allocated and provided
 	// by us). If we have no state type, we do nothing!
 	inputs := original.Input()
+	// if r.stateType != nil {
+	// 	// For outputs, we will only return the state type.
+	// 	outputs, err = argmapper.NewValueSet(append(outputs.Values(), argmapper.Value{
+	// 		// Type: r.stateType,
+	// 		Type: reflect.TypeOf(&pb.StatusReport_Resource{}),
+	// 	}))
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// 	q.Q("len outputs:", len(outputs.Values()))
+
+	// 	// Zero our state now
+	// 	// r.initState(true)
+	// 	r.status = &pb.StatusReport_Resource{}
+
+	// For input, we have to remove the state type
+	inputVals := inputs.Values()
+	q.Q("len input:", len(inputVals))
+	for i := 0; i < len(inputVals); i++ {
+		v := inputVals[i]
+		// if v.Type != reflect.TypeOf(&pb.StatusReport_Resource{}) {
+		// 	q.Q("-- continuing")
+		// 	continue
+		// }
+		if v.Type != reflect.TypeOf(r.status) {
+			q.Q("-- continuing not r.status")
+			continue
+		}
+		q.Q("-- using")
+
+		// the type IS our state type, we need to remove it. We do
+		// this by swapping with the last element (order doesn't matter)
+		// and decrementing i so we reloop over this value.
+		inputVals[len(inputVals)-1], inputVals[i] = inputVals[i], inputVals[len(inputVals)-1]
+		inputVals = inputVals[:len(inputVals)-1]
+		i--
+	}
+	// 	inputs, err = argmapper.NewValueSet(inputVals)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// }
+
+	// We have to modify our inputs to add the set of dependencies to this.
+	// inputVals := original.Input().Values()
+	for _, d := range deps {
+		if d == r.name {
+			// This shouldn't happen, this would be an infinite loop. If this
+			// happened it means there is a bug or corruption somewhere. We
+			// panic so that we can track this bug down.
+			panic("resource dependent on itself for destroy")
+		}
+
+		inputVals = append(inputVals, markerValue(d))
+	}
+	// inputs, err := argmapper.NewValueSet(inputVals)
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	// Ensure we have the state available as an argument. If it is
+	// nil then we initialize it.
+	var buildArgs []argmapper.Arg
 	if r.stateType != nil {
-		// For outputs, we will only return the state type.
-		outputs, err = argmapper.NewValueSet(append(outputs.Values(), argmapper.Value{
-			// Type: r.stateType,
-			Type: reflect.TypeOf(&pb.StatusReport_Resource{}),
-		}))
-		if err != nil {
-			return nil, err
+		if r.stateValue == nil {
+			r.initState(true)
 		}
-		q.Q("len outputs:", len(outputs.Values()))
-
-		// Zero our state now
-		// r.initState(true)
-		r.status = &pb.StatusReport_Resource{}
-
-		// For input, we have to remove the state type
-		inputVals := inputs.Values()
-		q.Q("len input:", len(inputVals))
-		for i := 0; i < len(inputVals); i++ {
-			v := inputVals[i]
-			if v.Type != reflect.TypeOf(&pb.StatusReport_Resource{}) {
-				q.Q("-- continuing")
-				continue
-			}
-			q.Q("-- using")
-
-			// the type IS our state type, we need to remove it. We do
-			// this by swapping with the last element (order doesn't matter)
-			// and decrementing i so we reloop over this value.
-			inputVals[len(inputVals)-1], inputVals[i] = inputVals[i], inputVals[len(inputVals)-1]
-			inputVals = inputVals[:len(inputVals)-1]
-			i--
-		}
-		inputs, err = argmapper.NewValueSet(inputVals)
-		if err != nil {
-			return nil, err
-		}
+		buildArgs = append(buildArgs, argmapper.Typed(reflect.TypeOf(&pb.StatusReport_Resource{})))
 	}
 
-	// return argmapper.BuildFunc(inputs, outputs, func(in, out *argmapper.ValueSet) error {
+	r.status = &pb.StatusReport_Resource{}
+	buildArgs = append(buildArgs, argmapper.Typed(r.status))
+	// We want to ensure that the destroy function is called at most once.
+	buildArgs = append(buildArgs, argmapper.FuncOnce())
+
 	return argmapper.BuildFunc(inputs, outputs, func(in, out *argmapper.ValueSet) error {
 		// Our available arguments are what was given to us and required
 		// by our function plus our newly allocated state.
@@ -348,20 +391,33 @@ func (r *Resource) mapperForStatus(deps []string) (*argmapper.Func, error) {
 
 		if r.stateType != nil {
 			// Initialize our state type and add it to our available args
-			args = append(args, argmapper.Typed(r.stateValue))
+			// args = append(args, argmapper.Typed(r.status))
+			args = append(args, argmapper.Typed(&pb.StatusReport_Resource{}))
 
 			// Ensure our output value for our state type is set
+			q.Q("==> checking out typed")
 			if v := out.Typed(reflect.TypeOf(&pb.StatusReport_Resource{})); v != nil {
+				q.Q("type of PB status")
 				// q.Q("out typed in status")
-				// if v := out.Typed(r.stateType); v != nil {
 				// q.Q(v)
-				v.Value = reflect.ValueOf(&pb.StatusReport_Resource{})
+				v.Value = reflect.ValueOf(r.status)
 			}
+			if v := out.Typed(reflect.TypeOf(r.status)); v != nil {
+				q.Q("type of status")
+				// q.Q("out typed in status")
+				// q.Q(v)
+				v.Value = reflect.ValueOf(r.status)
+				q.Q("value string:", v.Value.String())
+			}
+		} else {
+			q.Q("state type is nil in status build func")
 		}
 
 		// Ensure our output marker type is set
 		if v := out.TypedSubtype(markerVal.Type, markerVal.Subtype); v != nil {
+			q.Q("maker value too")
 			v.Value = markerVal.Value
+			q.Q("marker value string:", v.Value.String())
 		}
 
 		// // If we have creation state, append our resource to the order.
@@ -372,7 +428,7 @@ func (r *Resource) mapperForStatus(deps []string) (*argmapper.Func, error) {
 		// Call our function. We throw away any result types except for the error.
 		result := original.Call(args...)
 		return result.Err()
-	}, argmapper.FuncOnce())
+	}, buildArgs...)
 }
 
 // mapperForDestroy returns an argmapper func that will call the destroy
