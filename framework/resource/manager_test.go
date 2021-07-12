@@ -2,7 +2,7 @@ package resource
 
 import (
 	"errors"
-	"fmt"
+	"sort"
 	"testing"
 
 	"github.com/hashicorp/waypoint-plugin-sdk/internal/testproto"
@@ -262,36 +262,29 @@ func TestManagerStatusAll(t *testing.T) {
 		q.Q("---------")
 		q.Q("")
 	}()
-	var calledB int
+
 	require := require.New(t)
 
 	// init is a function so that we can reinitialize an empty manager
 	// for this test to test loading state
-	var destroyOrder []string
-	var destroyState int
 	init := func() *Manager {
 		return NewManager(
 			WithResource(NewResource(
 				WithName("A"),
 				WithState(&testState3{}),
 				WithCreate(func(s *testState3, v int) error {
-					sAddr := fmt.Sprintf("%p", s)
-					q.Q("==> s: ", sAddr)
+					// sAddr := fmt.Sprintf("%p", s)
+					// q.Q("==> s: ", sAddr)
 					s.Name = "resource A"
 					s.Value = v
 					return nil
 				}),
 				WithStatus(func(s *testState3, sr *pb.StatusReport_Resource) error {
-					sAddr := fmt.Sprintf("%p", s)
-					srAddr := fmt.Sprintf("%p", sr)
-					q.Q("==> s: ", sAddr)
-					q.Q("==> sr: ", srAddr)
+					// sAddr := fmt.Sprintf("%p", s)
+					// srAddr := fmt.Sprintf("%p", sr)
+					// q.Q("==> s: ", sAddr)
+					// q.Q("==> sr: ", srAddr)
 					sr.Name = s.Name
-					return nil
-				}),
-				WithDestroy(func(s *testState3) error {
-					destroyOrder = append(destroyOrder, "A")
-					destroyState = s.Value
 					return nil
 				}),
 			)),
@@ -299,10 +292,7 @@ func TestManagerStatusAll(t *testing.T) {
 			WithResource(NewResource(
 				WithName("B"),
 				WithCreate(func(s *testState3) error {
-					sAddr := fmt.Sprintf("%p", s)
-					q.Q("==> sB: ", sAddr)
-					// s.Name = "resource B"
-					calledB = s.Value
+					// no-op
 					return nil
 				}),
 				WithStatus(func(sr *pb.StatusReport_Resource) error {
@@ -313,31 +303,22 @@ func TestManagerStatusAll(t *testing.T) {
 					sr.Name = "no state here"
 					return nil
 				}),
-				WithDestroy(func() error {
-					destroyOrder = append(destroyOrder, "B")
-					return nil
-				}),
 			)),
 			WithResource(NewResource(
 				WithName("C"),
 				WithState(&testState4{}),
 				WithCreate(func(s *testState4) error {
-					sAddr := fmt.Sprintf("%p", s)
-					q.Q("==> sC: ", sAddr)
+					// sAddr := fmt.Sprintf("%p", s)
+					// q.Q("==> sC: ", sAddr)
 					s.Name = "resource C"
-					// calledB = s.Number
 					return nil
 				}),
 				WithStatus(func(s *testState4, sr *pb.StatusReport_Resource) error {
-					sAddr := fmt.Sprintf("%p", s)
-					srAddr := fmt.Sprintf("%p", sr)
-					q.Q("==> sC: ", sAddr)
-					q.Q("==> sCr: ", srAddr)
+					// sAddr := fmt.Sprintf("%p", s)
+					// srAddr := fmt.Sprintf("%p", sr)
+					// q.Q("==> sC: ", sAddr)
+					// q.Q("==> sCr: ", srAddr)
 					sr.Name = s.Name
-					return nil
-				}),
-				WithDestroy(func() error {
-					destroyOrder = append(destroyOrder, "B")
 					return nil
 				}),
 			)),
@@ -345,16 +326,14 @@ func TestManagerStatusAll(t *testing.T) {
 				WithName("D"),
 				WithState(&testState{}),
 				WithCreate(func(s *testState) error {
-					sAddr := fmt.Sprintf("%p", s)
-					q.Q("==> sD: ", sAddr)
+					// sAddr := fmt.Sprintf("%p", s)
+					// q.Q("==> sD: ", sAddr)
 					s.Value = 0
 					return nil
 				}),
 				// WithStatus(func(s *testState4, sr *pb.StatusReport_Resource) error {
 				// 	sAddr := fmt.Sprintf("%p", s)
 				// 	srAddr := fmt.Sprintf("%p", sr)
-				// 	q.Q("==> sC: ", sAddr)
-				// 	q.Q("==> sCr: ", srAddr)
 				// 	sr.Name = s.Name
 				// 	return nil
 				// }),
@@ -366,25 +345,27 @@ func TestManagerStatusAll(t *testing.T) {
 	m := init()
 	require.NoError(m.CreateAll(42))
 
-	// // Ensure we called all
-	require.Equal(calledB, 42)
-
 	require.NoError(m.StatusAll())
 	reports := m.Status()
 
 	require.Len(reports, 3)
+	sort.Sort(byName(reports))
 	for _, r := range reports {
 		q.Q("report Name:", r.Name)
 	}
 
-	require.Equal(reports[0].Name, "resource A")
-	require.Equal(reports[1].Name, "no state here")
+	require.Equal(reports[0].Name, "no state here")
+	require.Equal(reports[1].Name, "resource A")
 	require.Equal(reports[2].Name, "resource C")
 
 	// Destroy
 	require.NoError(m.DestroyAll())
-
-	// Ensure we destroyed
-	// require.Equal([]string{"B", "A"}, destroyOrder)
-	require.Equal(destroyState, 42)
 }
+
+// byName implements sort.Interface for sorting the results from calling
+// Status(), to ensure ordering when validating the tests
+type byName []pb.StatusReport_Resource
+
+func (a byName) Len() int           { return len(a) }
+func (a byName) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a byName) Less(i, j int) bool { return a[i].Name < a[j].Name }
