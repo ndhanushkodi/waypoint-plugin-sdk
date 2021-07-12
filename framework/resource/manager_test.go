@@ -262,7 +262,7 @@ func TestManagerStatusAll(t *testing.T) {
 		q.Q("---------")
 		q.Q("")
 	}()
-	// var calledB int32
+	var calledB int
 	require := require.New(t)
 
 	// init is a function so that we can reinitialize an empty manager
@@ -301,8 +301,8 @@ func TestManagerStatusAll(t *testing.T) {
 				WithCreate(func(s *testState3) error {
 					sAddr := fmt.Sprintf("%p", s)
 					q.Q("==> sB: ", sAddr)
-					s.Name = "resource B"
-					// calledB = s.Number
+					// s.Name = "resource B"
+					calledB = s.Value
 					return nil
 				}),
 				WithStatus(func(sr *pb.StatusReport_Resource) error {
@@ -320,9 +320,10 @@ func TestManagerStatusAll(t *testing.T) {
 			)),
 			WithResource(NewResource(
 				WithName("C"),
+				WithState(&testState4{}),
 				WithCreate(func(s *testState4) error {
 					sAddr := fmt.Sprintf("%p", s)
-					q.Q("==> sB: ", sAddr)
+					q.Q("==> sC: ", sAddr)
 					s.Name = "resource C"
 					// calledB = s.Number
 					return nil
@@ -330,8 +331,8 @@ func TestManagerStatusAll(t *testing.T) {
 				WithStatus(func(s *testState4, sr *pb.StatusReport_Resource) error {
 					sAddr := fmt.Sprintf("%p", s)
 					srAddr := fmt.Sprintf("%p", sr)
-					q.Q("==> sB: ", sAddr)
-					q.Q("==> sBr: ", srAddr)
+					q.Q("==> sC: ", sAddr)
+					q.Q("==> sCr: ", srAddr)
 					sr.Name = s.Name
 					return nil
 				}),
@@ -348,15 +349,19 @@ func TestManagerStatusAll(t *testing.T) {
 	require.NoError(m.CreateAll(42))
 
 	// // Ensure we called all
-	// require.Equal(calledB, int32(42))
+	require.Equal(calledB, 42)
 
 	require.NoError(m.StatusAll())
 	reports := m.Status()
-	// require.Len(reports, 1)
-	require.Len(reports, 2)
+
+	require.Len(reports, 3)
 	for _, r := range reports {
 		q.Q("report Name:", r.Name)
 	}
+
+	require.Equal(reports[0].Name, "resource A")
+	require.Equal(reports[1].Name, "no state here")
+	require.Equal(reports[2].Name, "resource C")
 
 	// Destroy
 	require.NoError(m.DestroyAll())
