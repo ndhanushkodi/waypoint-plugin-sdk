@@ -7,7 +7,6 @@ import (
 
 	"github.com/hashicorp/waypoint-plugin-sdk/internal/testproto"
 	pb "github.com/hashicorp/waypoint-plugin-sdk/proto/gen"
-	"github.com/ryboe/q"
 	"github.com/stretchr/testify/require"
 )
 
@@ -253,15 +252,15 @@ func TestManagerDestroyAll_noDestroyFunc(t *testing.T) {
 }
 
 func TestManagerStatusAll(t *testing.T) {
-	q.Q("---------")
-	q.Q("starting")
-	q.Q("---------")
-	defer func() {
-		q.Q("---------")
-		q.Q("end")
-		q.Q("---------")
-		q.Q("")
-	}()
+	// q.Q("---------")
+	// q.Q("starting")
+	// q.Q("---------")
+	// defer func() {
+	// 	q.Q("---------")
+	// 	q.Q("end")
+	// 	q.Q("---------")
+	// 	q.Q("")
+	// }()
 
 	require := require.New(t)
 
@@ -350,9 +349,9 @@ func TestManagerStatusAll(t *testing.T) {
 
 	require.Len(reports, 3)
 	sort.Sort(byName(reports))
-	for _, r := range reports {
-		q.Q("report Name:", r.Name)
-	}
+	// for _, r := range reports {
+	// 	q.Q("report Name:", r.Name)
+	// }
 
 	require.Equal(reports[0].Name, "no state here")
 	require.Equal(reports[1].Name, "resource A")
