@@ -347,7 +347,7 @@ func TestManagerStatusAll(t *testing.T) {
 				WithCreate(func(s *testState) error {
 					sAddr := fmt.Sprintf("%p", s)
 					q.Q("==> sD: ", sAddr)
-					s.Value ="resource D")
+					s.Value = 0
 					return nil
 				}),
 				// WithStatus(func(s *testState4, sr *pb.StatusReport_Resource) error {

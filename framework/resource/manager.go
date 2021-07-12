@@ -399,7 +399,10 @@ func (m *Manager) Status() []pb.StatusReport_Resource {
 	var reports []pb.StatusReport_Resource
 	for _, r := range m.resources {
 		if r.status != nil {
-			reports = append(reports, r.Status())
+			// TODO allow status to be nil
+			if r.status.Name != "" {
+				reports = append(reports, r.Status())
+			}
 		}
 	}
 	return reports
