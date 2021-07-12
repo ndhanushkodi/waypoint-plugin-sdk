@@ -9,7 +9,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/hashicorp/go-argmapper"
 	"github.com/hashicorp/go-multierror"
-	"github.com/ryboe/q"
 
 	"github.com/hashicorp/waypoint-plugin-sdk/component"
 	pb "github.com/hashicorp/waypoint-plugin-sdk/proto/gen"
@@ -156,8 +155,8 @@ func (r *Resource) Destroy(args ...interface{}) error {
 func (r *Resource) Status() pb.StatusReport_Resource {
 	if r.status == nil {
 		r.status = &pb.StatusReport_Resource{}
-	} else {
-		q.Q("status is not nil in Status() method")
+		// } else {
+		// 	q.Q("status is not nil in Status() method")
 	}
 	return pb.StatusReport_Resource{
 		Name:          r.status.Name,

@@ -319,12 +319,6 @@ func (m *Manager) StatusAll(args ...interface{}) error {
 		return err
 	}
 
-	cs := m.createState
-	if cs == nil || len(cs.Order) == 0 {
-		// We have no creation that was ever done so we have nothing to destroy.
-		return nil
-	}
-
 	var finalInputs []argmapper.Value
 	mapperArgs, err := m.mapperArgs()
 	if err != nil {
@@ -334,34 +328,19 @@ func (m *Manager) StatusAll(args ...interface{}) error {
 		mapperArgs = append(mapperArgs, argmapper.Typed(arg))
 	}
 
-	// Go through our creation order and create all our destroyers.
-	for i := 0; i < len(cs.Order); i++ {
-		r := m.Resource(cs.Order[i])
-		if r == nil {
-			// We are missing a resource that we should be destroying.
-			return fmt.Errorf(
-				"status failed: missing resource definition %q",
-				cs.Order[i],
-			)
-		}
-
-		// The dependencies are the resources that were created after
-		// this resource.
-		var deps []string
-		if next := i + 1; next < len(cs.Order) {
-			deps = cs.Order[next:]
-		}
+	// Go through available resources.
+	for _, r := range m.resources {
 
 		// Create the mapper for destroy. The dependencies are the set of
 		// created resources in the creation order that were ahead of this one.
-		f, err := r.mapperForStatus(deps)
+		f, err := r.mapperForStatus(nil)
 		if err != nil {
 			return err
 		}
 		mapperArgs = append(mapperArgs,
 			argmapper.ConverterFunc(f),
 			argmapper.Typed(r.State()),
-			argmapper.Typed(r.Status()),
+			// argmapper.Typed(r.Status()),
 		)
 
 		// Ensure that our final func is dependent on the marker for
@@ -399,7 +378,7 @@ func (m *Manager) Status() []pb.StatusReport_Resource {
 	var reports []pb.StatusReport_Resource
 	for _, r := range m.resources {
 		if r.status != nil {
-			// TODO allow status to be nil
+			// TODO allow status to be nil - this change happens in Resource
 			if r.status.Name != "" {
 				reports = append(reports, r.Status())
 			}

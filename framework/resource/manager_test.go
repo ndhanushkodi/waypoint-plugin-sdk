@@ -2,11 +2,13 @@ package resource
 
 import (
 	"errors"
+	"fmt"
 	"sort"
 	"testing"
 
 	"github.com/hashicorp/waypoint-plugin-sdk/internal/testproto"
 	pb "github.com/hashicorp/waypoint-plugin-sdk/proto/gen"
+	"github.com/ryboe/q"
 	"github.com/stretchr/testify/require"
 )
 
@@ -252,15 +254,15 @@ func TestManagerDestroyAll_noDestroyFunc(t *testing.T) {
 }
 
 func TestManagerStatusAll(t *testing.T) {
-	// q.Q("---------")
-	// q.Q("starting")
-	// q.Q("---------")
-	// defer func() {
-	// 	q.Q("---------")
-	// 	q.Q("end")
-	// 	q.Q("---------")
-	// 	q.Q("")
-	// }()
+	q.Q("---------")
+	q.Q("starting")
+	q.Q("---------")
+	defer func() {
+		q.Q("---------")
+		q.Q("end")
+		q.Q("---------")
+		q.Q("")
+	}()
 
 	require := require.New(t)
 
@@ -272,17 +274,17 @@ func TestManagerStatusAll(t *testing.T) {
 				WithName("A"),
 				WithState(&testState3{}),
 				WithCreate(func(s *testState3, v int) error {
-					// sAddr := fmt.Sprintf("%p", s)
-					// q.Q("==> s: ", sAddr)
+					sAddr := fmt.Sprintf("%p", s)
+					q.Q("==> sA: ", sAddr)
 					s.Name = "resource A"
 					s.Value = v
 					return nil
 				}),
 				WithStatus(func(s *testState3, sr *pb.StatusReport_Resource) error {
-					// sAddr := fmt.Sprintf("%p", s)
-					// srAddr := fmt.Sprintf("%p", sr)
-					// q.Q("==> s: ", sAddr)
-					// q.Q("==> sr: ", srAddr)
+					sAddr := fmt.Sprintf("%p", s)
+					srAddr := fmt.Sprintf("%p", sr)
+					q.Q("==> sA: ", sAddr)
+					q.Q("==> sAr: ", srAddr)
 					sr.Name = s.Name
 					return nil
 				}),
@@ -292,13 +294,15 @@ func TestManagerStatusAll(t *testing.T) {
 				WithName("B"),
 				WithCreate(func(s *testState3) error {
 					// no-op
+					sAddr := fmt.Sprintf("%p", s)
+					q.Q("==> sB (should match A): ", sAddr)
 					return nil
 				}),
 				WithStatus(func(sr *pb.StatusReport_Resource) error {
 					// sAddr := fmt.Sprintf("%p", s)
-					// srAddr := fmt.Sprintf("%p", sr)
+					srAddr := fmt.Sprintf("%p", sr)
 					// q.Q("==> sB: ", sAddr)
-					// q.Q("==> sBr: ", srAddr)
+					q.Q("==> sBr: ", srAddr)
 					sr.Name = "no state here"
 					return nil
 				}),
@@ -307,16 +311,16 @@ func TestManagerStatusAll(t *testing.T) {
 				WithName("C"),
 				WithState(&testState4{}),
 				WithCreate(func(s *testState4) error {
-					// sAddr := fmt.Sprintf("%p", s)
-					// q.Q("==> sC: ", sAddr)
+					sAddr := fmt.Sprintf("%p", s)
+					q.Q("==> sC: ", sAddr)
 					s.Name = "resource C"
 					return nil
 				}),
 				WithStatus(func(s *testState4, sr *pb.StatusReport_Resource) error {
-					// sAddr := fmt.Sprintf("%p", s)
-					// srAddr := fmt.Sprintf("%p", sr)
-					// q.Q("==> sC: ", sAddr)
-					// q.Q("==> sCr: ", srAddr)
+					sAddr := fmt.Sprintf("%p", s)
+					srAddr := fmt.Sprintf("%p", sr)
+					q.Q("==> sC: ", sAddr)
+					q.Q("==> sCr: ", srAddr)
 					sr.Name = s.Name
 					return nil
 				}),
@@ -325,8 +329,8 @@ func TestManagerStatusAll(t *testing.T) {
 				WithName("D"),
 				WithState(&testState{}),
 				WithCreate(func(s *testState) error {
-					// sAddr := fmt.Sprintf("%p", s)
-					// q.Q("==> sD: ", sAddr)
+					sAddr := fmt.Sprintf("%p", s)
+					q.Q("==> sD: ", sAddr)
 					s.Value = 0
 					return nil
 				}),
