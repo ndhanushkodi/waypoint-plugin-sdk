@@ -318,6 +318,28 @@ func TestManagerStatusAll(t *testing.T) {
 					return nil
 				}),
 			)),
+			WithResource(NewResource(
+				WithName("C"),
+				WithCreate(func(s *testState4) error {
+					sAddr := fmt.Sprintf("%p", s)
+					q.Q("==> sB: ", sAddr)
+					s.Name = "resource C"
+					// calledB = s.Number
+					return nil
+				}),
+				WithStatus(func(s *testState4, sr *pb.StatusReport_Resource) error {
+					sAddr := fmt.Sprintf("%p", s)
+					srAddr := fmt.Sprintf("%p", sr)
+					q.Q("==> sB: ", sAddr)
+					q.Q("==> sBr: ", srAddr)
+					sr.Name = s.Name
+					return nil
+				}),
+				WithDestroy(func() error {
+					destroyOrder = append(destroyOrder, "B")
+					return nil
+				}),
+			)),
 		)
 	}
 
