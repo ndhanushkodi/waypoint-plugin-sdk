@@ -364,6 +364,7 @@ func (m *Manager) StatusAll(args ...interface{}) error {
 		mapperArgs = append(mapperArgs,
 			argmapper.ConverterFunc(f),
 			argmapper.Typed(r.State()),
+			argmapper.Typed(r.Status()),
 		)
 
 		// Ensure that our final func is dependent on the marker for
