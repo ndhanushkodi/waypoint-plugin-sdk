@@ -123,6 +123,8 @@ type testState3 struct {
 	Value int
 }
 
+type testState4 testState3
+
 func TestResourceStatus(t *testing.T) {
 	// q.Q("---------")
 	// q.Q("starting")
