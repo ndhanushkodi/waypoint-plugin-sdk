@@ -155,8 +155,6 @@ func (r *Resource) Destroy(args ...interface{}) error {
 func (r *Resource) Status() pb.StatusReport_Resource {
 	if r.status == nil {
 		r.status = &pb.StatusReport_Resource{}
-		// } else {
-		// 	q.Q("status is not nil in Status() method")
 	}
 	return pb.StatusReport_Resource{
 		Name:          r.status.Name,
@@ -296,27 +294,6 @@ func (r *Resource) mapperForStatus(deps []string) (*argmapper.Func, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	// We have to modify our inputs to add the set of dependencies to this.
-	// inputVals := original.Input().Values()
-	// q.Q("input vals:")
-	// for _, iv := range inputVals {
-	// 	q.Q(iv.Type.String())
-	// }
-	// for _, d := range deps {
-	// 	if d == r.name {
-	// 		// This shouldn't happen, this would be an infinite loop. If this
-	// 		// happened it means there is a bug or corruption somewhere. We
-	// 		// panic so that we can track this bug down.
-	// 		panic("resource dependent on itself for destroy")
-	// 	}
-
-	// 	inputVals = append(inputVals, markerValue(d))
-	// }
-	// inputs, err := argmapper.NewValueSet(inputVals)
-	// if err != nil {
-	// 	return nil, err
-	// }
 
 	// Our inputs default to whatever the function requires and our
 	// output defaults to nothing (only the error type). We will proceed to

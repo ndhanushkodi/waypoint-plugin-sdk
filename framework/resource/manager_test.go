@@ -8,7 +8,6 @@ import (
 
 	"github.com/hashicorp/waypoint-plugin-sdk/internal/testproto"
 	pb "github.com/hashicorp/waypoint-plugin-sdk/proto/gen"
-	"github.com/ryboe/q"
 	"github.com/stretchr/testify/require"
 )
 
@@ -254,16 +253,6 @@ func TestManagerDestroyAll_noDestroyFunc(t *testing.T) {
 }
 
 func TestManagerStatusAll(t *testing.T) {
-	q.Q("---------")
-	q.Q("starting")
-	q.Q("---------")
-	defer func() {
-		q.Q("---------")
-		q.Q("end")
-		q.Q("---------")
-		q.Q("")
-	}()
-
 	require := require.New(t)
 
 	// init is a function so that we can reinitialize an empty manager
@@ -272,69 +261,48 @@ func TestManagerStatusAll(t *testing.T) {
 		return NewManager(
 			WithResource(NewResource(
 				WithName("A"),
-				WithState(&testState3{}),
-				WithCreate(func(s *testState3, v int) error {
-					sAddr := fmt.Sprintf("%p", s)
-					q.Q("==> sA: ", sAddr)
-					s.Name = "resource A"
+				WithState(&testState{}),
+				WithCreate(func(s *testState, v int) error {
 					s.Value = v
 					return nil
 				}),
-				WithStatus(func(s *testState3, sr *pb.StatusReport_Resource) error {
-					sAddr := fmt.Sprintf("%p", s)
-					srAddr := fmt.Sprintf("%p", sr)
-					q.Q("==> sA: ", sAddr)
-					q.Q("==> sAr: ", srAddr)
-					sr.Name = s.Name
+				WithStatus(func(s *testState, sr *pb.StatusReport_Resource) error {
+					sr.Name = fmt.Sprintf(statusNameTpl, s.Value)
 					return nil
 				}),
 			)),
 
 			WithResource(NewResource(
 				WithName("B"),
-				WithCreate(func(s *testState3) error {
+				WithCreate(func(s *testState) error {
 					// no-op
-					sAddr := fmt.Sprintf("%p", s)
-					q.Q("==> sB (should match A): ", sAddr)
 					return nil
 				}),
 				WithStatus(func(sr *pb.StatusReport_Resource) error {
-					// sAddr := fmt.Sprintf("%p", s)
-					srAddr := fmt.Sprintf("%p", sr)
-					// q.Q("==> sB: ", sAddr)
-					q.Q("==> sBr: ", srAddr)
 					sr.Name = "no state here"
 					return nil
 				}),
 			)),
 			WithResource(NewResource(
 				WithName("C"),
-				WithState(&testState4{}),
-				WithCreate(func(s *testState4) error {
-					sAddr := fmt.Sprintf("%p", s)
-					q.Q("==> sC: ", sAddr)
-					s.Name = "resource C"
+				WithState(&testState2{}),
+				WithCreate(func(s *testState2) error {
+					s.Value = 13
 					return nil
 				}),
-				WithStatus(func(s *testState4, sr *pb.StatusReport_Resource) error {
-					sAddr := fmt.Sprintf("%p", s)
-					srAddr := fmt.Sprintf("%p", sr)
-					q.Q("==> sC: ", sAddr)
-					q.Q("==> sCr: ", srAddr)
-					sr.Name = s.Name
+				WithStatus(func(s *testState2, sr *pb.StatusReport_Resource) error {
+					sr.Name = fmt.Sprintf(statusNameTpl, s.Value)
 					return nil
 				}),
 			)),
 			WithResource(NewResource(
 				WithName("D"),
-				WithState(&testState{}),
-				WithCreate(func(s *testState) error {
-					sAddr := fmt.Sprintf("%p", s)
-					q.Q("==> sD: ", sAddr)
+				WithState(&testState3{}),
+				WithCreate(func(s *testState3) error {
 					s.Value = 0
 					return nil
 				}),
-				// WithStatus(func(s *testState4, sr *pb.StatusReport_Resource) error {
+				// WithStatus(func(s *testState2, sr *pb.StatusReport_Resource) error {
 				// 	sAddr := fmt.Sprintf("%p", s)
 				// 	srAddr := fmt.Sprintf("%p", sr)
 				// 	sr.Name = s.Name
@@ -353,13 +321,10 @@ func TestManagerStatusAll(t *testing.T) {
 
 	require.Len(reports, 3)
 	sort.Sort(byName(reports))
-	// for _, r := range reports {
-	// 	q.Q("report Name:", r.Name)
-	// }
 
-	require.Equal(reports[0].Name, "no state here")
-	require.Equal(reports[1].Name, "resource A")
-	require.Equal(reports[2].Name, "resource C")
+	require.Equal("no state here", reports[0].Name)
+	require.Equal(fmt.Sprintf(statusNameTpl,13), reports[1].Name)
+	require.Equal(fmt.Sprintf(statusNameTpl,42), reports[2].Name)
 
 	// Destroy
 	require.NoError(m.DestroyAll())
